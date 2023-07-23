@@ -1,43 +1,58 @@
+# 必要なモジュールをインポート
+import requests
+import base64
+import json
+from flask import Flask, render_template, Response
 import cv2
+import threading
 
-# 事前にトレーニング済みの感情分類モデルを読み込む（例：Deep Learningモデル）
-# モデルの読み込みはこの部分を適切に行ってください
+# Flaskアプリケーションを初期化
+app = Flask(__name__)
 
-# Haar Cascadeの顔検出器を読み込む
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# カメラの映像をリアルタイムで取得する関数
+def get_camera_frame():
+    cap = cv2.VideoCapture(0)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        _, buffer = cv2.imencode('.jpg', frame)
+        img_file = base64.b64encode(buffer).decode('utf-8')
+        response = send_request(img_file)
 
-# カメラを開く
-cap = cv2.VideoCapture(0)
+        json_dict = json.loads(response.text)
+        if 'faces' in json_dict and json_dict['faces']:
+            emotions = json_dict['faces'][0]['attributes']['emotion']
+            print(emotions)  # 表情推定結果をコンソールに出力（ここをWebページに表示する）
 
-while True:
-    # カメラから画像を取得
-    ret, frame = cap.read()
+        _, jpg_frame = cv2.imencode('.jpg', frame)
+        frame_bytes = jpg_frame.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-    # グレースケールに変換
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    cap.release()
 
-    # 顔の検出
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+# 「Face++」に対してリクエストを送る関数（前述のものと同じ）
+def send_request(img_file):
+    endpoint = 'https://api-us.faceplusplus.com'
+    response = requests.post(
+        endpoint + '/facepp/v3/detect',
+        {
+            'api_key': "SK7WRvwNYjP5cVHQqzKNcUEU1J7PzxX3",  # ご自身の「API Key」を入力する
+            'api_secret': "9ZLk4Teaxa0l1USu-EuCfJ_Sgv6YbdyN",  # ご自身の「API Secret」を入力する
+            'image_base64': img_file,
+            'return_attributes': 'emotion'
+        }
+    )
+    return response
 
-    for (x, y, w, h) in faces:
-        # 顔の部分を切り取る
-        face_roi = frame[y:y + h, x:x + w]
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-        # 事前に用意した感情分類モデルを使用して感情を推定する（ここは適切なコードに置き換えてください）
-        # 以下は仮のコードで、"happy"または"neutral"という仮の感情を出力します
-        emotion = "happy"
+@app.route('/video_feed')
+def video_feed():
+    return Response(get_camera_frame(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-        # 顔の周囲に枠と感情を表示する
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-        cv2.putText(frame, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
-
-    # 画像を表示する
-    cv2.imshow('Emotion Detection', frame)
-
-    # 'q'キーを押して終了
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-# カメラをリリースし、ウィンドウを閉じる
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    app.run(debug=True)
