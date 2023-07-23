@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-time Emotion Estimation</title>
+</head>
+<body>
+    <h1>Real-time Emotion Estimation</h1>
+    <div>
+        <video id="video" width="640" height="480" autoplay></video>
+        <div id="emotion_result"></div>
+    </div>
+    <script>
+        const video = document.getElementById('video');
+        const emotionResultDiv = document.getElementById('emotion_result');
+
+        // カメラの映像を表示するための関数
+        async function getCameraStream() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        }
+
+        // 表情推定結果を取得し、表示する関数
+        async function getEmotionResult() {
+            const response = await fetch('/video_feed');
+            const reader = response.body.getReader();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    break;
+                }
+
+                const blob = new Blob([value], { type: 'image/jpeg' });
+                const imageURL = URL.createObjectURL(blob);
+
+                emotionResultDiv.innerHTML = `<img src="${imageURL}" width="320" height="240">`;
+            }
+        }
+
+        // カメラ映像と表情推定結果の取得を開始する
+        getCameraStream();
+        getEmotionResult();
+    </script>
+</body>
+</html>
