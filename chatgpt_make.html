@@ -1,55 +1,58 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>表情管理アプリケーション</title>
-  <!-- Chart.jsのスクリプトを追加 -->
+  <title>面接評価</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <video id="video" width="640" height="480" autoplay></video>
-  <canvas id="canvas" width="640" height="480"></canvas>
-  <!-- グラフを表示するためのCanvas要素 -->
-  <canvas id="emotionChart" width="400" height="200"></canvas>
+  <h1>面接評価結果</h1>
+  <canvas id="barChart"></canvas>
 
   <script>
-    // ページの読み込みが完了したら実行
-    window.onload = function() {
-      const video = document.getElementById('video');
-      const canvas = document.getElementById('canvas');
-      const ctx = canvas.getContext('2d');
-      const resultDiv = document.getElementById('result');
+    // 感情推定の値が入力される配列
+    const emotionArray = [8, 7, 6, 5, 8, 9, 7, 8, 6, 5];
 
-      // Webカメラの利用許可を取得
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then((stream) => {
-          video.srcObject = stream;
-        })
-        .catch((error) => {
-          console.error('Webカメラの利用許可がありません。', error);
-        });
+    // その他の要素を仮に設定（実際のデータはここに入れる）
+    const answerArray = [9, 7, 5, 3, 8, 6, 7, 9, 5, 7];
+    const nonVerbalArray = [8, 5, 4, 3, 7, 6, 5, 8, 3, 6];
 
-      // Microsoft Emotion APIのエンドポイントとサブスクリプションキー
-      const endpoint = 'https://westcentralus.api.cognitive.microsoft.com/face/v1.0/detect';
-      const apiKey = 'YOUR_EMOTION_API_KEY'; // ここをEmotion APIのキーに置き換える
+    // 総合スコアを計算する関数
+    function calculateTotalScore(emotionArray, answerArray, nonVerbalArray) {
+      const numDataPoints = emotionArray.length;
 
-      // Chart.jsを初期化
-      const ctxChart = document.getElementById('emotionChart').getContext('2d');
-      const emotionChart = new Chart(ctxChart, {
+      // 各要素の重みを設定
+      const emotionWeight = 0.4;
+      const answerWeight = 0.3;
+      const nonVerbalWeight = 0.2;
+
+      // 総合スコアを初期化
+      let totalScore = 0;
+
+      // 各要素のスコアを合計
+      for (let i = 0; i < numDataPoints; i++) {
+        const emotionScore = emotionArray[i] * emotionWeight;
+        const answerScore = answerArray[i] * answerWeight;
+        const nonVerbalScore = nonVerbalArray[i] * nonVerbalWeight;
+
+        // 各要素のスコアを加算
+        totalScore += (emotionScore + answerScore + nonVerbalScore);
+      }
+
+      return totalScore;
+    }
+
+    // ページ読み込み時に棒グラフを描画
+    document.addEventListener('DOMContentLoaded', function() {
+      const barChart = new Chart(document.getElementById('barChart'), {
         type: 'bar',
         data: {
-          labels: ['笑顔', '悲しい顔'],
+          labels: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
           datasets: [{
-            label: '表情スコア',
-            data: [0, 0], // 初期値は0
-            backgroundColor: [
-              'rgba(75, 192, 192, 0.2)',
-              'rgba(255, 99, 132, 0.2)',
-            ],
-            borderColor: [
-              'rgba(75, 192, 192, 1)',
-              'rgba(255, 99, 132, 1)',
-            ],
-            borderWidth: 1
+            label: '総合スコア',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1,
+            data: Array(emotionArray.length).fill(0), // 初期値は0
           }]
         },
         options: {
@@ -61,48 +64,13 @@
         }
       });
 
-      // フレームごとに表情を取得する関数
-      function detectEmotion() {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const image = canvas.toDataURL('image/jpeg');
-
-        // Emotion APIにリクエストを送信
-        fetch(endpoint + '?returnFaceAttributes=emotion', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Ocp-Apim-Subscription-Key': apiKey,
-          },
-          body: JSON.stringify({ url: image }),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data && data.length > 0) {
-              const emotions = data[0].faceAttributes.emotion;
-              const { happiness, sadness } = emotions;
-
-              // グラフを更新して表情スコアを表示
-              emotionChart.data.datasets[0].data = [happiness, sadness];
-              emotionChart.update();
-
-              // 表情スコアをテキストとして表示
-              resultDiv.innerHTML = `
-                <p>笑顔: ${happiness}</p>
-                <p>悲しい顔: ${sadness}</p>
-              `;
-            }
-          })
-          .catch((error) => {
-            console.error('Emotion APIのリクエストに失敗しました。', error);
-          });
-
-        // 1000msごとに表情を取得
-        setTimeout(detectEmotion, 1000);
-      }
-
-      // 表情を取得する関数を実行
-      detectEmotion();
-    };
+      // 1秒ごとに総合スコアを更新
+      setInterval(function() {
+        const totalScore = calculateTotalScore(emotionArray, answerArray, nonVerbalArray);
+        barChart.data.datasets[0].data = [totalScore]; // データを更新
+        barChart.update(); // グラフを更新
+      }, 1000);
+    });
   </script>
 </body>
 </html>
